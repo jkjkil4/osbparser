@@ -14,7 +14,17 @@ from osbparser.utils import cover, get_first_part, safe_get, split_parts
 
 __all__ = [
     'OsuStoryboard',
-    'Events'
+    'Events',
+    'Sprite',
+    'Animation',
+    'CmdFade',
+    'CmdMove',
+    'CmdScale',
+    'CmdRotate',
+    'CmdColour',
+    'CmdLoop',
+    'CmdEventTriggeredLoop',
+    'CmdParameters'
 ]
 
 EVENTS_SECTION_NAME = '[Events]'

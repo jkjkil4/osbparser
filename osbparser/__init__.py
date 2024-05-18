@@ -6,4 +6,5 @@ Tool for parsing `.osb` file
 __version__ = '0.1.0'
 
 # flake8: noqa
+from osbparser.enums import *
 from osbparser.osb import *

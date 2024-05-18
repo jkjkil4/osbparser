@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools as it
 from dataclasses import dataclass
-from typing import NoReturn, Generator
+from typing import Any, Callable, Generator, Iterable, NoReturn, Self
 
 from osbparser.enums import (Easing, Layer, Origin, find_enum_key,
                              find_enum_value)
@@ -158,9 +158,9 @@ class Command:
                 return key
         assert False
 
-    @staticmethod
+    @classmethod
     def raise_if_has_children(
-        cls: type[Command],
+        cls,
         children: list[Tree],
         lineno: int
     ) -> None | NoReturn:
@@ -168,9 +168,9 @@ class Command:
             cmd_name = Command.get_cmd_name(cls)
             raise SubCommandNotSupported(f'Command "{cmd_name}" at line {lineno} does not support subcommand.')
 
-    @staticmethod
+    @classmethod
     def raise_if_wrong_count(
-        cls: type[Command],
+        cls,
         args: list[str],
         one_arg_len: int,
         lineno: int
@@ -179,6 +179,23 @@ class Command:
         if length < one_arg_len or length % one_arg_len != 0:
             cmd_name = Command.get_cmd_name(cls)
             raise WrongArgumentCount(f'Wrong argument count of "{cmd_name}" at line {lineno}.')
+
+    @classmethod
+    def parse_args(
+        cls,
+        args: list[str],
+        one_arg_len: int,
+        lineno: int
+    ) -> Generator[tuple[Easing, int, int, tuple[str, ...]], None, None]:
+        cls.raise_if_wrong_count(args, one_arg_len, lineno)
+
+        easing, start, end = cls.parse_time_args(*args[:3], lineno)
+        duration = end - start
+
+        for attrs in cls.parse_attr_args(args[3:], one_arg_len):
+            yield (easing, start, end, attrs)
+            start += duration
+            end += duration
 
     @staticmethod
     def parse_time_args(s_easing: str, s_start: str, s_end: str, lineno: int) -> tuple[Easing, int, int]:
@@ -192,7 +209,7 @@ class Command:
         )
 
     @staticmethod
-    def parse_attr_args(args: list[str], one_arg_len: int) -> Generator[tuple[str]]:
+    def parse_attr_args(args: list[str], one_arg_len: int) -> Generator[tuple[str, ...]]:
         cmd_arg_len = one_arg_len * 2
         # parse shorthand
         for i in range(0, cover(len(args), cmd_arg_len) * cmd_arg_len, cmd_arg_len):
@@ -203,62 +220,163 @@ class Command:
             ]
             yield (*part1, *part2)
 
+    @staticmethod
+    def floatize(lst: Iterable[str]) -> Generator[float, None, None]:
+        return
+
+
+class AttrsCommand(Command):
+    @classmethod
+    def from_tree(cls, tree: Tree, one_arg_len: int, *, factory: Callable[[str], Any] = float) -> list[Self]:
+        (lineno, text), children = tree
+        cls.raise_if_has_children(children, lineno)
+
+        args = split_parts(text)[1:]
+
+        return [
+            cls(easing, start, end, *[factory(a) for a in attrs])
+            for easing, start, end, attrs
+            in cls.parse_args(args, one_arg_len, lineno)
+        ]
+
 
 @dataclass
-class CmdFade(Command):
+class CmdFade(AttrsCommand):
+    '''
+    ``startopacity``: the opacity at the beginning of the animation
+    ``endopacity``: the opacity at the end of the animation
+
+    ``0`` - invisible, ``1`` - fully visible
+    '''
     start_opacity: float
     end_opacity: float
 
-    @staticmethod
-    def from_tree(tree: Tree) -> list[CmdFade]:
-        (lineno, text), children = tree
-        Command.raise_if_has_children(__class__, children, lineno)
-
-        args = split_parts(text)[1:]
-        Command.raise_if_wrong_count(__class__, args, 1, lineno)
-
-        easing, start, end = Command.parse_time_args(*args[:3], lineno)
-        duration = end - start
-
-        result: list[CmdFade] = []
-        for a1, a2 in Command.parse_attr_args(args[3:], 1):
-            result.append(CmdFade(easing, start, end, float(a1), float(a2)))
-            start += duration
-            end += duration
-
-        return result
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[Self]:
+        return super().from_tree(tree, 1)
 
 
 @dataclass
-class CmdMove(Command):
-    @staticmethod
-    def from_tree(tree: Tree) -> list[CmdMove]:
-        raise NotImplementedError()
+class CmdMove(AttrsCommand):
+    '''
+    ``startx, starty``: the position at the beginning of the animation
+    ``endx, endy``: the position at the end of the animation
+
+    Note: the size of the play field is ``(640,480)``, with ``(0,0)`` being top left corner.
+    '''
+    startx: float
+    starty: float
+    endx: float
+    endy: float
+
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[Self]:
+        return super().from_tree(tree, 2)
 
 
 @dataclass
-class CmdScale(Command):
-    @staticmethod
-    def from_tree(tree: Tree) -> list[CmdScale]:
-        raise NotImplementedError()
+class CmdMoveX(AttrsCommand):
+    '''
+    ``startx``: the x position at the beginning of the animation
+    ``endx``: the x position at the end of the animation
+    '''
+    startx: float
+    endx: float
+
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[Self]:
+        return super().from_tree(tree, 1)
 
 
 @dataclass
-class CmdRotate(Command):
-    @staticmethod
-    def from_tree(tree: Tree) -> list[CmdRotate]:
-        raise NotImplementedError()
+class CmdMoveY(AttrsCommand):
+    '''
+    ``starty``: the y position at the beginning of the animation
+    ``endy``: the y position at the end of the animation
+    '''
+    starty: float
+    endy: float
+
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[Self]:
+        return super().from_tree(tree, 1)
 
 
 @dataclass
-class CmdColour(Command):
-    @staticmethod
-    def from_tree(tree: Tree) -> list[CmdColour]:
-        raise NotImplementedError()
+class CmdScale(AttrsCommand):
+    '''
+    ``startscale``: the scale factor at the beginning of the animation
+    ``endscale``: the scale factor at the end of the animation
+
+    ``1 = 100%``, ``2 = 200%`` etc. decimals are allowed.
+    '''
+    startscale: float
+    endscale: float
+
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[Self]:
+        return super().from_tree(tree, 1)
 
 
 @dataclass
-class CmdLoop(Command):
+class CmdVectorScale(AttrsCommand):
+    '''
+    ``startx, starty``: the scale factor at the beginning of the animation
+    ``endx, endy``: the scale factor at the end of the animation
+
+    ``1 = 100%``, ``2 = 200%`` etc. decimals are allowed.
+    '''
+    startx: float
+    starty: float
+    endx: float
+    endy: float
+
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[Self]:
+        return super().from_tree(tree, 2)
+
+
+@dataclass
+class CmdRotate(AttrsCommand):
+    '''
+    ``startangle``: the angle to rotate by in radians at the beginning of the animation
+    ``endangle``: the angle to rotate by in radians at the end of the animation
+
+    positive angle is clockwise rotation
+    '''
+    startangle: float
+    endangle: float
+
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[Self]:
+        return super().from_tree(tree, 1)
+
+
+@dataclass
+class CmdColour(AttrsCommand):
+    '''
+    ``r1, g1, b1``: the starting component-wise colour
+    ``r2, g2, b2``: the finishing component-wise colour
+
+    - sprites with ``(255,255,255)`` will be their original colour.
+    - sprites with ``(0,0,0)`` will be totally black.
+    - anywhere in between will result in subtractive colouring.
+    - to make full use of this, brighter greyscale sprites work very well.
+    '''
+    r1: int
+    g1: int
+    b1: int
+    r2: int
+    g2: int
+    b2: int
+
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[Self]:
+        return super().from_tree(tree, 3, factory=int)
+
+
+@dataclass
+class CmdLoop(AttrsCommand):
     @staticmethod
     def from_tree(tree: Tree) -> list[CmdLoop]:
         raise NotImplementedError()
@@ -267,23 +385,23 @@ class CmdLoop(Command):
 @dataclass
 class CmdEventTriggeredLoop(Command):
     @staticmethod
-    def from_tree(tree: Tree) -> list[CmdEventTriggeredLoop]:
+    def from_tree(tree: Tree):
         raise NotImplementedError()
 
 
 @dataclass
 class CmdParameters(Command):
     @staticmethod
-    def from_tree(tree: Tree) -> CmdParameters:
+    def from_tree(tree: Tree):
         raise NotImplementedError()
 
 
 COMMAND_NAME_MAP['F'] = CmdFade
 COMMAND_NAME_MAP['M'] = CmdMove
-COMMAND_NAME_MAP['MX'] = CmdMove
-COMMAND_NAME_MAP['MY'] = CmdMove
+COMMAND_NAME_MAP['MX'] = CmdMoveX
+COMMAND_NAME_MAP['MY'] = CmdMoveY
 COMMAND_NAME_MAP['S'] = CmdScale
-COMMAND_NAME_MAP['V'] = CmdScale
+COMMAND_NAME_MAP['V'] = CmdVectorScale
 COMMAND_NAME_MAP['R'] = CmdRotate
 COMMAND_NAME_MAP['C'] = CmdColour
 COMMAND_NAME_MAP['L'] = CmdLoop

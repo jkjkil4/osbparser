@@ -9,20 +9,22 @@ EnumT = TypeVar('EnumT', bound=Enum)
 __all__ = [
     'Layer',
     'Origin',
+    'Trigger',
+    'Parameter',
     'Easing'
 ]
 
 
-def find_enum_key(enum_cls: type[EnumT], key: str, lineno: int) -> EnumT:
+def find_enum_by_name(enum_cls: type[EnumT], name: str, lineno: int) -> EnumT:
     try:
-        return enum_cls[key]
+        return enum_cls[name]
     except KeyError:
-        raise InvalidEnum(f'Invalid enum "{key}" for "{enum_cls.__name__}" '
+        raise InvalidEnum(f'Invalid enum "{name}" for "{enum_cls.__name__}" '
                           f'at line {lineno}, '
                           f'use one of {list(enum_cls.__members__.keys())} instead.')
 
 
-def find_enum_value(enum_cls: type[EnumT], value: str, lineno: int) -> EnumT:
+def find_enum_by_value(enum_cls: type[EnumT], value: str, lineno: int) -> EnumT:
     try:
         return enum_cls(value)
     except ValueError:
@@ -49,6 +51,20 @@ class Origin(Enum):
     BottomLeft = 6
     BottomCentre = 7
     BottomRight = 8
+
+
+class Trigger(Enum):
+    HitSoundClap = 0
+    HitSoundFinish = 1
+    HitSoundWhistle = 2
+    Passing = 3
+    Failing = 4
+
+
+class Parameter(Enum):
+    H = 0
+    V = 1
+    A = 2
 
 
 ELASTIC_CONST = 2 * math.pi / .3

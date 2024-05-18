@@ -4,13 +4,13 @@ import itertools as it
 from dataclasses import dataclass
 from typing import Any, Callable, Generator, Iterable, NoReturn, Self
 
-from osbparser.enums import (Easing, Layer, Origin, find_enum_key,
-                             find_enum_value)
+from osbparser.enums import (Easing, Layer, Origin, Parameter, Trigger,
+                             find_enum_by_name, find_enum_by_value)
 from osbparser.exception import (InvalidObjectTypeError, InvalidSectionError,
                                  MultipleSectionError, SubCommandNotSupported,
                                  WrongArgumentCount)
 from osbparser.tree import Tree, file2tree, str2tree
-from osbparser.utils import get_first_part, get_default, split_parts
+from osbparser.utils import get_default, get_first_part, split_parts
 
 __all__ = [
     'OsuStoryboard',
@@ -109,8 +109,8 @@ class Sprite(Object):
                                      f'expected 5, found {len(args)}')
 
         s_layer, s_origin, file, s_x, s_y = args
-        layer = find_enum_key(Layer, s_layer, lineno)
-        origin = find_enum_key(Origin, s_origin, lineno)
+        layer = find_enum_by_name(Layer, s_layer, lineno)
+        origin = find_enum_by_name(Origin, s_origin, lineno)
         x = float(s_x)
         y = float(s_y)
 
@@ -134,12 +134,7 @@ OBJECT_NAME_MAP['Animation'] = Animation
 COMMAND_NAME_MAP: dict[str, type[Command]] = {}
 
 
-@dataclass
 class Command:
-    easing: Easing
-    start: int
-    end: int
-
     @staticmethod
     def from_tree(tree: Tree) -> list[Command]:
         lineno, text = tree[0]
@@ -203,7 +198,7 @@ class Command:
         if not s_end:
             s_end = s_start
         return (
-            find_enum_value(Easing, int(s_easing), lineno),
+            find_enum_by_value(Easing, int(s_easing), lineno),
             int(s_start),
             int(s_end)
         )
@@ -227,7 +222,14 @@ class Command:
         return
 
 
-class AttrsCommand(Command):
+@dataclass
+class SimpleCommand(Command):
+    easing: Easing
+    start: int
+    end: int
+
+
+class AttrsCommand(SimpleCommand):
     @classmethod
     def from_tree(cls, tree: Tree, one_arg_len: int, *, factory: Callable[[str], Any] = float) -> list[Self]:
         (lineno, text), children = tree
@@ -378,24 +380,85 @@ class CmdColour(AttrsCommand):
 
 
 @dataclass
-class CmdLoop(AttrsCommand):
+class CmdLoop(Command):
+    '''
+    ``starttime``: the time of the first loop's start.
+    ``loopcount``: number of times to repeat the loop.
+
+    Note that events inside a loop should be timed with a zero-base.
+    This means that you should start from 0ms for the inner event's timing and work up from there.
+    The loop event's start time will be added to this value at game runtime.
+    '''
+    starttime: int
+    loopcount: int
+    children: list[Command]
+
     @staticmethod
     def from_tree(tree: Tree) -> list[CmdLoop]:
-        raise NotImplementedError()
+        (lineno, text), children = tree
+
+        args = split_parts(text)[1:]
+        if len(args) != 2:
+            raise WrongArgumentCount(f'Wrong argument count at line {lineno}, '
+                                     f'expected 2, found {len(args)}')
+
+        s_starttime, s_loopcount = args
+
+        return [CmdLoop(int(s_starttime), int(s_loopcount), [Command.from_tree(child) for child in children])]
 
 
 @dataclass
 class CmdEventTriggeredLoop(Command):
+    '''
+    Trigger loops can be used to trigger animations based on play-time events.
+    Although called loops, trigger loops only execute once when triggered.
+
+    ``start``: When the trigger is valid
+    ``end``: When the trigger stops being valid
+
+    Trigger loops are zero-based similar to normal loops.
+    If two overlap, the first will be halted and replaced by a new loop from the beginning.
+    If they overlap any existing storyboarded events,
+    they will not trigger until those transformations are no in effect.
+    '''
+    trigger: Trigger
+    start: int
+    end: int
+    children: list[Command]
+
     @staticmethod
-    def from_tree(tree: Tree):
-        raise NotImplementedError()
+    def from_tree(tree: Tree) -> list[CmdEventTriggeredLoop]:
+        (lineno, text), children = tree
+
+        args = split_parts(text)[1:]
+        if len(args) != 3:
+            raise WrongArgumentCount(f'Wrong argument count at line {lineno}, '
+                                     f'expected 3, found {len(args)}')
+
+        s_trigger, s_start, s_end = args
+        trigger = find_enum_by_name(s_trigger)
+        start = int(s_start)
+        end = int(s_end)
+
+        return [CmdEventTriggeredLoop(trigger, start, end, [Command.from_tree(child) for child in children])]
 
 
 @dataclass
-class CmdParameters(Command):
-    @staticmethod
-    def from_tree(tree: Tree):
-        raise NotImplementedError()
+class CmdParameters(SimpleCommand):
+    parameter: Parameter
+
+    @classmethod
+    def from_tree(cls, tree: Tree) -> list[CmdParameters]:
+        (lineno, text), children = tree
+        cls.raise_if_has_children(children, lineno)
+
+        args = split_parts(text)[1:]
+        if len(args) != 4:
+            raise WrongArgumentCount(f'Wrong argument count at line {lineno}.')
+
+        easing, start, end = cls.parse_time_args(*args[:3], lineno)
+
+        return [CmdParameters(easing, start, end, find_enum_by_name(Parameter, args[3]))]
 
 
 COMMAND_NAME_MAP['F'] = CmdFade

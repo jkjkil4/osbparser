@@ -37,14 +37,7 @@ def split_parts(text: str) -> list[str]:
     return result
 
 
-def cover(full: int, unit: int) -> int:
-    '''
-    Equivalent to: ``ceil(full / unit)``
-    '''
-    return (full + unit - 1) // unit
-
-
-def safe_get(lst: list[T], at: int, default=None) -> T | None:
+def get_default(lst: list[T], at: int, default=None) -> T | None:
     if 0 <= at < len(lst):
         return lst[at]
     return default

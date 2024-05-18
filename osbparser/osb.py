@@ -10,7 +10,7 @@ from osbparser.exception import (InvalidObjectTypeError, InvalidSectionError,
                                  MultipleSectionError, SubCommandNotSupported,
                                  WrongArgumentCount)
 from osbparser.tree import Tree, file2tree, str2tree
-from osbparser.utils import cover, get_first_part, safe_get, split_parts
+from osbparser.utils import get_first_part, get_default, split_parts
 
 __all__ = [
     'OsuStoryboard',
@@ -210,12 +210,14 @@ class Command:
 
     @staticmethod
     def parse_attr_args(args: list[str], one_arg_len: int) -> Generator[tuple[str, ...]]:
-        cmd_arg_len = one_arg_len * 2
-        # parse shorthand
-        for i in range(0, cover(len(args), cmd_arg_len) * cmd_arg_len, cmd_arg_len):
+        # parse shorthand & shorthand3
+        length = len(args)
+        if length != one_arg_len:
+            length -= one_arg_len
+        for i in range(0, length, one_arg_len):
             part1 = args[i: i + one_arg_len]
             part2 = [
-                safe_get(args, i + one_arg_len + j) or part1[j]     # parse shorthand3
+                get_default(args, i + one_arg_len + j) or part1[j]     # parse shorthand3
                 for j in range(one_arg_len)
             ]
             yield (*part1, *part2)

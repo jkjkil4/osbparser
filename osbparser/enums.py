@@ -231,7 +231,7 @@ class Easing(Enum):
                 return elastic_inout
 
             case Easing.BackIn:
-                return lambda t: t**2 * ((BACK_CONST + 1) * t + BACK_CONST) + 1
+                return lambda t: t**2 * ((BACK_CONST + 1) * t - BACK_CONST)
             case Easing.BackOut:
                 return lambda t: (t - 1)**2 * ((BACK_CONST + 1) * (t - 1) + BACK_CONST) + 1
             case Easing.BackInOut:

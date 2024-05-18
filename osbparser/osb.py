@@ -17,9 +17,14 @@ __all__ = [
     'Events',
     'Sprite',
     'Animation',
+    'Command',
+    'SimpleCommand',
     'CmdFade',
     'CmdMove',
+    'CmdMoveX',
+    'CmdMoveY',
     'CmdScale',
+    'CmdVectorScale',
     'CmdRotate',
     'CmdColour',
     'CmdLoop',
@@ -227,6 +232,9 @@ class SimpleCommand(Command):
     easing: Easing
     start: int
     end: int
+
+    def is_instant(self) -> bool:
+        return self.start == self.end
 
 
 class AttrsCommand(SimpleCommand):

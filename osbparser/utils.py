@@ -38,6 +38,9 @@ def split_parts(text: str) -> list[str]:
 
 
 def cover(full: int, unit: int) -> int:
+    '''
+    Equivalent to: ``ceil(full / unit)``
+    '''
     return (full + unit - 1) // unit
 
 

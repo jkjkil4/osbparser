@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools as it
 from dataclasses import dataclass
-from typing import NoReturn
+from typing import NoReturn, Generator
 
 from osbparser.enums import (Easing, Layer, Origin, find_enum_key,
                              find_enum_value)
@@ -172,16 +172,17 @@ class Command:
     def raise_if_wrong_count(
         cls: type[Command],
         args: list[str],
-        args_once: int,
+        one_arg_len: int,
         lineno: int
     ) -> None | NoReturn:
         length = len(args) - 3
-        if length < args_once or length % args_once != 0:
+        if length < one_arg_len or length % one_arg_len != 0:
             cmd_name = Command.get_cmd_name(cls)
             raise WrongArgumentCount(f'Wrong argument count of "{cmd_name}" at line {lineno}.')
 
     @staticmethod
     def parse_time_args(s_easing: str, s_start: str, s_end: str, lineno: int) -> tuple[Easing, int, int]:
+        # parse shorthand2
         if not s_end:
             s_end = s_start
         return (
@@ -189,6 +190,18 @@ class Command:
             int(s_start),
             int(s_end)
         )
+
+    @staticmethod
+    def parse_attr_args(args: list[str], one_arg_len: int) -> Generator[tuple[str]]:
+        cmd_arg_len = one_arg_len * 2
+        # parse shorthand
+        for i in range(0, cover(len(args), cmd_arg_len) * cmd_arg_len, cmd_arg_len):
+            part1 = args[i: i + one_arg_len]
+            part2 = [
+                safe_get(args, i + one_arg_len + j) or part1[j]     # parse shorthand3
+                for j in range(one_arg_len)
+            ]
+            yield (*part1, *part2)
 
 
 @dataclass
@@ -205,15 +218,13 @@ class CmdFade(Command):
         Command.raise_if_wrong_count(__class__, args, 1, lineno)
 
         easing, start, end = Command.parse_time_args(*args[:3], lineno)
+        duration = end - start
 
-        args = args[3:]
         result: list[CmdFade] = []
-        for i in range(0, cover(len(args), 2) * 2, 2):
-            a1 = args[i]
-            a2 = safe_get(args, i + 1)
-            if not a2:
-                a2 = a1
-            result.append(CmdFade(easing, start, end, a1, a2))
+        for a1, a2 in Command.parse_attr_args(args[3:], 1):
+            result.append(CmdFade(easing, start, end, float(a1), float(a2)))
+            start += duration
+            end += duration
 
         return result
 

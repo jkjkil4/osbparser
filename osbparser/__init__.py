@@ -1,7 +1,7 @@
 '''
 Tool for parsing `.osb` file
 '''
-# .osb format reference https://osu.ppy.sh/community/forums/topics/1869?n=1
+# .osb format reference: https://osu.ppy.sh/wiki/zh/Storyboard/Scripting
 
 __version__ = '0.1.0'
 

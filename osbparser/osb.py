@@ -579,7 +579,7 @@ class CmdEventTriggeredLoop(Command):
         start = int(s_start)
         end = int(s_end)
 
-        return [CmdEventTriggeredLoop(trigger, start, end, [Command.from_tree(child) for child in children])]
+        return [CmdEventTriggeredLoop(lineno, trigger, start, end, [Command.from_tree(child) for child in children])]
 
 
 @dataclass
@@ -597,7 +597,7 @@ class CmdParameters(SimpleCommand):
 
         easing, start, end = cls.parse_time_args(*args[:3], lineno)
 
-        return [CmdParameters(easing, start, end, find_enum_by_name(Parameter, args[3], lineno))]
+        return [CmdParameters(lineno, easing, start, end, find_enum_by_name(Parameter, args[3], lineno))]
 
 
 COMMAND_NAME_MAP['F'] = CmdFade

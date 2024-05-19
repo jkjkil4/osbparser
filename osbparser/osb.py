@@ -35,7 +35,7 @@ __all__ = [
     'CmdColour',
     'CmdLoop',
     'CmdEventTriggeredLoop',
-    'CmdParameters'
+    'CmdParameter'
 ]
 
 EVENTS_SECTION_NAME = '[Events]'
@@ -244,7 +244,7 @@ class ClassifiedCommands(Generic[ObjT]):
                         CmdScale, CmdVectorScale,
                         CmdRotate,
                         CmdColour,
-                        CmdParameters)
+                        CmdParameter)
         }
         for cmd in commands:
             lst = result.get(cmd.__class__, None)
@@ -583,11 +583,11 @@ class CmdEventTriggeredLoop(Command):
 
 
 @dataclass
-class CmdParameters(SimpleCommand):
+class CmdParameter(SimpleCommand):
     parameter: Parameter
 
     @classmethod
-    def from_tree(cls, tree: Tree) -> list[CmdParameters]:
+    def from_tree(cls, tree: Tree) -> list[CmdParameter]:
         (lineno, text), children = tree
         cls.raise_if_has_children(children, lineno)
 
@@ -597,7 +597,7 @@ class CmdParameters(SimpleCommand):
 
         easing, start, end = cls.parse_time_args(*args[:3], lineno)
 
-        return [CmdParameters(lineno, easing, start, end, find_enum_by_name(Parameter, args[3], lineno))]
+        return [CmdParameter(lineno, easing, start, end, find_enum_by_name(Parameter, args[3], lineno))]
 
 
 COMMAND_NAME_MAP['F'] = CmdFade
@@ -610,4 +610,4 @@ COMMAND_NAME_MAP['R'] = CmdRotate
 COMMAND_NAME_MAP['C'] = CmdColour
 COMMAND_NAME_MAP['L'] = CmdLoop
 COMMAND_NAME_MAP['T'] = CmdEventTriggeredLoop
-COMMAND_NAME_MAP['P'] = CmdParameters
+COMMAND_NAME_MAP['P'] = CmdParameter

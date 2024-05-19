@@ -4,8 +4,9 @@ from bisect import bisect
 from dataclasses import dataclass
 from typing import Callable, Generic, TypeVar
 
+from osbparser.enums import Parameter
 from osbparser.osb import (ClassifiedCommands, CmdColour, CmdFade, CmdMove,
-                           CmdMoveX, CmdMoveY, CmdRotate,
+                           CmdMoveX, CmdMoveY, CmdParameter, CmdRotate,
                            CmdScale, CmdVectorScale, Object, SimpleCommand)
 
 T = TypeVar('T', bound=SimpleCommand)
@@ -25,7 +26,11 @@ class ObjectInterpolator(Generic[ObjT]):
         self.vector_scale = self.create_vector_scale_interpolator(classified[CmdVectorScale])
         self.rotate = self.create_rotate_interpolator(classified[CmdRotate])
         self.colour = self.create_colour_interpolator(classified[CmdColour])
-        # TODO: CmdParameter
+
+        params = classified[CmdParameter]
+        self.h_flag = self.create_param_checker(params, Parameter.H)
+        self.v_flag = self.create_param_checker(params, Parameter.V)
+        self.a_flag = self.create_param_checker(params, Parameter.A)
 
     @staticmethod
     def create_fade_interpolator(commands: list[CmdFade]):
@@ -87,6 +92,22 @@ class ObjectInterpolator(Generic[ObjT]):
             )
 
         return interpolator
+
+    @staticmethod
+    def create_param_checker(commands: list[CmdParameter], param: Parameter):
+        commands = [cmd for cmd in commands if cmd.parameter == param]
+
+        def checker(t: float) -> bool:
+            if not commands:
+                return False
+
+            idx = bisect(commands, t, key=lambda x: x.start)
+            if idx == 0:
+                return False
+            cmd = commands[idx - 1]
+            return cmd.is_instant() or t <= cmd.end
+
+        return checker
 
 
 @dataclass

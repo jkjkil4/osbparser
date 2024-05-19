@@ -15,6 +15,27 @@ ObjT = TypeVar('ObjT', bound=Object)
 
 
 class ObjectInterpolator(Generic[ObjT]):
+    '''
+    The interpolators that you can determine the specific value by a timestamp.
+
+    Interpolators:
+
+    ``fade`` ``move`` ``movex`` ``movey`` ``scale`` ``vector_scale`` ``rotate`` ``colour``
+
+    Example:
+
+    Use ``.fade(1500)`` to determine the fade value at 1500ms
+
+    Param checkers:
+
+    ``h_flag`` ``v_flag`` ``a_flag`` is available for
+    checking whether the flag is set or not, by a timestamp.
+
+    Example:
+
+    If parameter ``H`` is on at 1500ms, ``.h_flag(1500)`` returns ``True``.
+    '''
+
     obj: ObjT
 
     def __init__(self, classified: ClassifiedCommands[ObjT]):

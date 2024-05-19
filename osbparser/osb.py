@@ -21,7 +21,7 @@ __all__ = [
     'Events',
     'Sprite',
     'Animation',
-    'FlattenCommands',
+    'FlattenedCommands',
     'ClassifiedCommands',
     'Command',
     'SimpleCommand',
@@ -49,6 +49,11 @@ ClassifiedCommandsDict = dict[type['SimpleCommand'], list['SimpleCommand']]
 
 @dataclass
 class OsuStoryboard:
+    '''
+    Use :meth:`from_file` to load from a ``.osb`` file.
+
+    Use :meth:`from_str` to load from a string, which has the content like ``.osb`` file.
+    '''
     name: str
     events: Events
 
@@ -84,6 +89,9 @@ class OsuStoryboard:
 
 @dataclass
 class Events:
+    '''
+    The ``[Events]`` section of ``.osb`` file.
+    '''
     objects: list[Object]
 
     @staticmethod
@@ -96,6 +104,9 @@ OBJECT_NAME_MAP: dict[str, type[Object]] = {}
 
 @dataclass
 class Object:
+    '''
+    The base class of :class:`Sprite` and :class:`Animation`
+    '''
     lineno: int
 
     commands: list[Command]
@@ -116,8 +127,8 @@ class Object:
 
         return cls.from_tree(tree)
 
-    def flatten(self) -> FlattenCommands[Self]:
-        return FlattenCommands.from_object(self)
+    def flatten(self) -> FlattenedCommands[Self]:
+        return FlattenedCommands.from_object(self)
 
 
 class Sprite(Object):
@@ -177,13 +188,20 @@ OBJECT_NAME_MAP['Animation'] = Animation
 
 
 @dataclass
-class FlattenCommands(Generic[ObjT]):
+class FlattenedCommands(Generic[ObjT]):
+    '''
+    Flatten commands
+
+    The ``commands`` list includes only :class:`SimpleCommand`,
+    which means contents of :class:`CmdLoop` have been parsed into :class:`SimpleCommand` objects,
+    and the contents of :class:`CmdEventTriggeredLoop` are ignored.
+    '''
     obj: ObjT
     commands: list[SimpleCommand]
 
     @staticmethod
-    def from_object(obj: ObjU) -> FlattenCommands[ObjU]:
-        return FlattenCommands(obj, FlattenCommands.parse(obj.commands))
+    def from_object(obj: ObjU) -> FlattenedCommands[ObjU]:
+        return FlattenedCommands(obj, FlattenedCommands.parse(obj.commands))
 
     @overload
     def __getitem__(self, i: int) -> SimpleCommand: ...
@@ -208,7 +226,7 @@ class FlattenCommands(Generic[ObjT]):
                 result.append(copy.copy(cmd))
 
             elif isinstance(cmd, CmdLoop):
-                subcommands = FlattenCommands.parse(cmd.children)
+                subcommands = FlattenedCommands.parse(cmd.children)
                 duration = 0
 
                 for subcmd in subcommands:
@@ -230,26 +248,40 @@ class FlattenCommands(Generic[ObjT]):
         return result
 
     def get_start(self) -> int:
+        '''
+        Get the start of available range.
+        '''
         return min(cmd.start for cmd in self.commands)
 
     def get_end(self) -> int:
+        '''
+        Get the end of available range.
+        '''
         return max(cmd.end for cmd in self.commands)
 
 
 @dataclass
 class ClassifiedCommands(Generic[ObjT]):
+    '''
+    Commands classified into different types
+    '''
     obj: ObjT
-    flatten: FlattenCommands[ObjT]
+    flatten: FlattenedCommands[ObjT]
     commands: ClassifiedCommandsDict
 
     @staticmethod
-    def from_flatten(flatten: FlattenCommands[ObjU]) -> ClassifiedCommands[ObjU]:
+    def from_flatten(flatten: FlattenedCommands[ObjU]) -> ClassifiedCommands[ObjU]:
         return ClassifiedCommands(flatten.obj, flatten, ClassifiedCommands.parse(flatten.commands))
 
     def __getitem__(self, key: type[CmdT]) -> list[CmdT]:
         return self.commands[key]
 
     def visible_ranges(self) -> Generator[tuple[int, int], None, None]:
+        '''
+        Iterates the visible time-ranges of the object.
+
+        It is determined by the available range and :class:`CmdFade` command.
+        '''
         if not self.flatten:
             return
 
@@ -288,6 +320,9 @@ COMMAND_NAME_MAP: dict[str, type[Command]] = {}
 
 @dataclass
 class Command:
+    '''
+    The base class of commands
+    '''
     lineno: int
 
     @staticmethod
@@ -372,13 +407,12 @@ class Command:
             ]
             yield (*part1, *part2)
 
-    @staticmethod
-    def floatize(lst: Iterable[str]) -> Generator[float, None, None]:
-        return
-
 
 @dataclass
 class SimpleCommand(Command):
+    '''
+    The base class of commands that have ``easing`` method and ``start`` ``end`` timestamps.
+    '''
     easing: Easing
     start: int
     end: int
@@ -388,6 +422,9 @@ class SimpleCommand(Command):
 
 
 class AnimCommand(SimpleCommand):
+    '''
+    The base class of commands that have animation process.
+    '''
     @classmethod
     def from_tree(cls, tree: Tree, one_arg_len: int, *, factory: Callable[[str], Any] = float) -> list[Self]:
         (lineno, text), children = tree
@@ -614,6 +651,17 @@ class CmdEventTriggeredLoop(Command):
 
 @dataclass
 class CmdParameter(SimpleCommand):
+    '''
+    Unlike the other commands, which can be seen as setting endpoints
+    along continually-tracked values, the Parameter command apply
+    ONLY while they are active, i.e.,you can't put a command
+    from timestamps 1000 to 2000 and expect the value to apply at time 3000,
+    even if the object's other commands aren't finished by that point.
+
+    - ``H``: flip the image horizontally.
+    - ``V``: flip the image vertically.
+    - ``A``: use additive-colour blending instead of alpha-blending.
+    '''
     parameter: Parameter
 
     @classmethod

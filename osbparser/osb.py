@@ -7,8 +7,8 @@ from logging import WARNING
 from typing import (Any, Callable, Generator, Generic, Iterable, NoReturn,
                     Self, TypeVar, overload)
 
-from osbparser.enums import (Easing, Layer, Origin, Parameter, Trigger,
-                             find_enum_by_name, find_enum_by_value)
+from osbparser.enums import (Easing, Layer, LoopType, Origin, Parameter,
+                             Trigger, find_enum_by_name, find_enum_by_value)
 from osbparser.exception import (InvalidObjectTypeError, InvalidSectionError,
                                  MultipleSectionError, SubCommandNotSupported,
                                  WrongArgumentCount)
@@ -96,6 +96,8 @@ OBJECT_NAME_MAP: dict[str, type[Object]] = {}
 
 @dataclass
 class Object:
+    lineno: int
+
     commands: list[Command]
     layer: Layer
     origin: Origin
@@ -114,8 +116,10 @@ class Object:
 
         return cls.from_tree(tree)
 
+    def flatten(self) -> FlattenCommands[Self]:
+        return FlattenCommands.from_object(self)
 
-@dataclass
+
 class Sprite(Object):
     @staticmethod
     def from_tree(tree: Tree) -> Sprite:
@@ -135,17 +139,37 @@ class Sprite(Object):
         command_groups = (Command.from_tree(child) for child in children)
         commands = list(it.chain.from_iterable(command_groups))
 
-        return Sprite(commands, layer, origin, file, x, y)
-
-    def flatten(self) -> FlattenCommands[Self]:
-        return FlattenCommands.from_object(self)
+        return Sprite(lineno, commands, layer, origin, file, x, y)
 
 
 @dataclass
 class Animation(Object):
+    frame_count: int
+    frame_delay: float
+    looptype: LoopType
+
     @staticmethod
     def from_tree(tree: Tree) -> Animation:
-        raise NotImplementedError('"Animation" is not implemented.')
+        (lineno, text), children = tree
+
+        args = split_parts(text)[1:]
+        if len(args) != 8:
+            raise WrongArgumentCount(f'Wrong argument count at line {lineno}, '
+                                     f'expected 8, found {len(args)}')
+
+        s_layer, s_origin, file, s_x, s_y, s_frame_count, s_frame_delay, s_looptype = args
+        layer = find_enum_by_name(Layer, s_layer, lineno)
+        origin = find_enum_by_name(Origin, s_origin, lineno)
+        x = float(s_x)
+        y = float(s_y)
+        frame_count = int(s_frame_count)
+        frame_delay = float(s_frame_delay)
+        looptype = find_enum_by_name(LoopType, s_looptype, lineno)
+
+        command_groups = (Command.from_tree(child) for child in children)
+        commands = list(it.chain.from_iterable(command_groups))
+
+        return Animation(lineno, commands, layer, origin, file, x, y, frame_count, frame_delay, looptype)
 
 
 OBJECT_NAME_MAP['Sprite'] = Sprite
@@ -177,7 +201,7 @@ class FlattenCommands(Generic[ObjT]):
 
     @staticmethod
     def parse(commands: list[Command]) -> list[SimpleCommand]:
-        result = []
+        result: list[SimpleCommand] = []
 
         for cmd in commands:
             if isinstance(cmd, SimpleCommand):
@@ -205,6 +229,12 @@ class FlattenCommands(Generic[ObjT]):
 
         return result
 
+    def get_start(self) -> int:
+        return min(cmd.start for cmd in self.commands)
+
+    def get_end(self) -> int:
+        return max(cmd.end for cmd in self.commands)
+
 
 @dataclass
 class ClassifiedCommands(Generic[ObjT]):
@@ -224,7 +254,7 @@ class ClassifiedCommands(Generic[ObjT]):
             return
 
         fade_cmds = self[CmdFade]
-        start = self.flatten[0].start
+        start = self.flatten.get_start()
         for cmd in fade_cmds:
             if start is None and (cmd.start_opacity != 0 or cmd.end_opacity != 0):
                 start = cmd.start
@@ -233,7 +263,7 @@ class ClassifiedCommands(Generic[ObjT]):
                 start = None
 
         if start is not None:
-            yield (start, self.flatten[-1].end)
+            yield (start, self.flatten.get_end())
 
     @staticmethod
     def parse(commands: list[SimpleCommand]) -> ClassifiedCommandsDict:

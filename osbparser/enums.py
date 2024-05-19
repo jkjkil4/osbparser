@@ -16,6 +16,11 @@ __all__ = [
 
 
 def find_enum_by_name(enum_cls: type[EnumT], name: str, lineno: int) -> EnumT:
+    '''
+    Get the enum object by it's ``name``
+
+    ``lineno`` is using for raise InvalidEnum when failed
+    '''
     try:
         return enum_cls[name]
     except KeyError:
@@ -25,6 +30,11 @@ def find_enum_by_name(enum_cls: type[EnumT], name: str, lineno: int) -> EnumT:
 
 
 def find_enum_by_value(enum_cls: type[EnumT], value: str, lineno: int) -> EnumT:
+    '''
+    Get the enum object by it's ``value``
+
+    ``lineno`` is using for raise InvalidEnum when failed
+    '''
     try:
         return enum_cls(value)
     except ValueError:
@@ -51,6 +61,11 @@ class Origin(Enum):
     BottomLeft = 6
     BottomCentre = 7
     BottomRight = 8
+
+
+class LoopType(Enum):
+    LoopForever = 0
+    LoopOnce = 1
 
 
 class Trigger(Enum):

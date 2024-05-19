@@ -125,157 +125,266 @@ class Easing(Enum):
         # https://github.com/ppy/osu-framework/blob/master/osu.Framework/Graphics/Transforms/DefaultEasingFunction.cs
         match self:
             case Easing.Linear:
-                return lambda t: t
-
+                return self.linear
             case Easing.EasingIn | Easing.QuadIn:
-                return lambda t: t**2
+                return self.quad_in
             case Easing.EasingOut | Easing.QuadOut:
-                return lambda t: t * (2 - t)
+                return self.quad_out
             case Easing.QuadInOut:
-                return lambda t: (
-                    t**2 * 2
-                    if t < .5
-                    else (t - 1)**2 * -2 + 1
-                )
-
+                return self.quad_inout
             case Easing.CubicIn:
-                return lambda t: t**3
+                return self.cubic_in
             case Easing.CubicOut:
-                return lambda t: (t - 1)**3 + 1
+                return self.cubic_out
             case Easing.CubicInOut:
-                return lambda t: (
-                    t**3 * 4
-                    if t < .5
-                    else (t - 1)**3 * 4 + 1
-                )
-
+                return self.cubic_inout
             case Easing.QuartIn:
-                return lambda t: t**4
+                return self.quart_in
             case Easing.QuartOut:
-                return lambda t: 1 - (t - 1)**4
+                return self.quart_out
             case Easing.QuartInOut:
-                return lambda t: (
-                    t**4 * 8
-                    if t < .5
-                    else (t - 1)**4 * -8 + 1
-                )
-
+                return self.quart_inout
             case Easing.QuintIn:
-                return lambda t: t**5
+                return self.quint_in
             case Easing.QuintOut:
-                return lambda t: (t - 1)**5 + 1
+                return self.quint_out
             case Easing.QuintInOut:
-                return lambda t: (
-                    t**5 * 16
-                    if t < .5
-                    else (t - 1)**5 * 16 + 1
-                )
-
+                return self.quint_inout
             case Easing.SineIn:
-                return lambda t: 1 - math.cos(t * math.pi * .5)
+                return self.sine_in
             case Easing.SineOut:
-                return lambda t: math.sin(t * math.pi * .5)
+                return self.sine_out
             case Easing.SineInOut:
-                return lambda t: .5 - .5 * math.cos(math.pi * t)
-
+                return self.sine_inout
             case Easing.ExpoIn:
-                return lambda t: 2**(10 * (t - 1)) + EXPO_OFFSET * (t - 1)
+                return self.expo_in
             case Easing.ExpoOut:
-                return lambda t: -(2**(-10 * t)) + 1 + EXPO_OFFSET * t
+                return self.expo_out
             case Easing.ExpoInOut:
-                return lambda t: (
-                    .5 * 2**(20 * t - 10) + EXPO_OFFSET * (2 * t - 1)
-                    if t < .5
-                    else 1 - .5 * 2**(-20 * t + 10) + EXPO_OFFSET * (-2 * t + 1)
-                )
-
+                return self.expo_inout
             case Easing.CircIn:
-                return lambda t: 1 - math.sqrt(1 - t**2)
+                return self.circ_in
             case Easing.CircOut:
-                return lambda t: math.sqrt(1 - (t - 1)**2)
+                return self.circ_out
             case Easing.CircInOut:
-                def circ_inout(t: float) -> float:
-                    t *= 2
-                    return (
-                        .5 - .5 * math.sqrt(1 - t**2)
-                        if t < 1
-                        else .5 * math.sqrt(1 - (t - 2)**2) + .5
-                    )
-                return circ_inout
-
+                return self.circ_inout
             case Easing.ElasticIn:
-                return lambda t: -(2**(-10 + 10 * t)) * math.sin((1 - ELASTIC_CONST2 - t) * ELASTIC_CONST) \
-                    + ELASTIC_OFFSET_FULL * (1 - t)
+                return self.elastic_in
             case Easing.ElasticOut:
-                return lambda t: 2**(-10 * t) * math.sin((t - ELASTIC_CONST2) * ELASTIC_CONST) \
-                    + 1 - ELASTIC_OFFSET_FULL * t
+                return self.elastic_out
             case Easing.ElasticHalfOut:
-                return lambda t: 2**(-10 * t) * math.sin((.5 * t - ELASTIC_CONST2) * ELASTIC_CONST) \
-                    + 1 - ELASTIC_OFFSET_HALF * t
+                return self.elastic_half_out
             case Easing.ElasticQuarterOut:
-                return lambda t: 2**(-10 * t) * math.sin((.25 * t - ELASTIC_CONST2) * ELASTIC_CONST) \
-                    + 1 - ELASTIC_OFFSET_QUARTER * t
+                return self.elastic_quarter_out
             case Easing.ElasticInOut:
-                def elastic_inout(t: float) -> float:
-                    t *= 2
-                    if t < 1:
-                        return -.5 * (
-                            2**(-10 + 10 * t) * math.sin((1 - ELASTIC_CONST2 * 1.5 - t) * ELASTIC_CONST / 1.5)
-                            - IN_OUT_ELASTIC_OFFSET * (1 - t)
-                        )
-                    t -= 1
-                    return .5 * (
-                        2**(-10 * t) * math.sin((t - ELASTIC_CONST2 * 1.5) * ELASTIC_CONST / 1.5)
-                        - IN_OUT_ELASTIC_OFFSET * t
-                    ) + 1
-                return elastic_inout
-
+                return self.elastic_inout
             case Easing.BackIn:
-                return lambda t: t**2 * ((BACK_CONST + 1) * t - BACK_CONST)
+                return self.back_in
             case Easing.BackOut:
-                return lambda t: (t - 1)**2 * ((BACK_CONST + 1) * (t - 1) + BACK_CONST) + 1
+                return self.back_out
             case Easing.BackInOut:
-                def back_inout(t: float) -> float:
-                    t *= 2
-                    if t < 1:
-                        return .5 * t**2 * ((BACK_CONST2 + 1) * t - BACK_CONST2)
-                    t -= 2
-                    return .5 * (t**2 * ((BACK_CONST2 + 1) * t + BACK_CONST2) + 2)
-                return back_inout
-
+                return self.back_inout
             case Easing.BounceIn:
-                def bounce_in(t: float) -> float:
-                    t = 1 - t
-                    if t < BOUNCE_CONST:
-                        return 1 - 7.5625 * t**2
-                    if t < 2 * BOUNCE_CONST:
-                        t -= 1.5 * BOUNCE_CONST
-                        return 1 - (7.5625 * t**2 + .75)
-                    if t < 2.5 * BOUNCE_CONST:
-                        t -= 2.25 * BOUNCE_CONST
-                        return 1 - (7.5625 * t**2 + .9375)
-                    t -= 2.625 * BOUNCE_CONST
-                    return 1 - (7.5625 * t**2 + .984375)
-                return bounce_in
-
+                return self.bounce_in
             case Easing.BounceOut:
-                def bounce_out(t: float) -> float:
-                    if t < BOUNCE_CONST:
-                        return 7.5625 * t**2
-                    if t < 2 * BOUNCE_CONST:
-                        t -= 1.5 * BOUNCE_CONST
-                        return 7.5625 * t**2 + .75
-                    if t < 2.5 * BOUNCE_CONST:
-                        t -= 2.25 * BOUNCE_CONST
-                        return 7.5625 * t**2 + .9375
-                    t -= 2.625 * BOUNCE_CONST
-                    return 7.5625 * t**2 + .984375
-                return bounce_out
-
+                return self.bounce_out
             case Easing.BounceInOut:
-                bounce_out = Easing.BounceOut.get_function()
-                return lambda t: (
-                    .5 - .5 * bounce_out(1 - t * 2)
-                    if t < .5
-                    else bounce_out((t - .5) * 2) * .5 + .5
-                )
+                return self.bounce_inout
+
+    @staticmethod
+    def linear(t: float) -> float:
+        return t
+
+    @staticmethod
+    def quad_in(t: float) -> float:
+        return t**2
+
+    @staticmethod
+    def quad_out(t: float) -> float:
+        return t * (2 - t)
+
+    @staticmethod
+    def quad_inout(t: float) -> float:
+        return (
+            t**2 * 2
+            if t < .5
+            else (t - 1)**2 * -2 + 1
+        )
+
+    @staticmethod
+    def cubic_in(t: float) -> float:
+        return t**3
+
+    @staticmethod
+    def cubic_out(t: float) -> float:
+        return (t - 1)**3 + 1
+
+    @staticmethod
+    def cubic_inout(t: float) -> float:
+        return (
+            t**3 * 4
+            if t < .5
+            else (t - 1)**3 * 4 + 1
+        )
+
+    @staticmethod
+    def quart_in(t: float) -> float:
+        return t**4
+
+    @staticmethod
+    def quart_out(t: float) -> float:
+        return 1 - (t - 1)**4
+
+    @staticmethod
+    def quart_inout(t: float) -> float:
+        return (
+            t**4 * 8
+            if t < .5
+            else (t - 1)**4 * -8 + 1
+        )
+
+    @staticmethod
+    def quint_in(t: float) -> float:
+        return t**5
+
+    @staticmethod
+    def quint_out(t: float) -> float:
+        return (t - 1)**5 + 1
+
+    @staticmethod
+    def quint_inout(t: float) -> float:
+        return (
+            t**5 * 16
+            if t < .5
+            else (t - 1)**5 * 16 + 1
+        )
+
+    @staticmethod
+    def sine_in(t: float) -> float:
+        return 1 - math.cos(t * math.pi * .5)
+
+    @staticmethod
+    def sine_out(t: float) -> float:
+        return math.sin(t * math.pi * .5)
+
+    @staticmethod
+    def sine_inout(t: float) -> float:
+        return .5 - .5 * math.cos(math.pi * t)
+
+    @staticmethod
+    def expo_in(t: float) -> float:
+        return 2**(10 * (t - 1)) + EXPO_OFFSET * (t - 1)
+
+    @staticmethod
+    def expo_out(t: float) -> float:
+        return -(2**(-10 * t)) + 1 + EXPO_OFFSET * t
+
+    @staticmethod
+    def expo_inout(t: float) -> float:
+        return (
+            .5 * 2**(20 * t - 10) + EXPO_OFFSET * (2 * t - 1)
+            if t < .5
+            else 1 - .5 * 2**(-20 * t + 10) + EXPO_OFFSET * (-2 * t + 1)
+        )
+
+    @staticmethod
+    def circ_in(t: float) -> float:
+        return 1 - math.sqrt(1 - t**2)
+
+    @staticmethod
+    def circ_out(t: float) -> float:
+        return math.sqrt(1 - (t - 1)**2)
+
+    @staticmethod
+    def circ_inout(t: float) -> float:
+        t *= 2
+        return (
+            .5 - .5 * math.sqrt(1 - t**2)
+            if t < 1
+            else .5 * math.sqrt(1 - (t - 2)**2) + .5
+        )
+
+    @staticmethod
+    def elastic_in(t: float) -> float:
+        return -(2**(-10 + 10 * t)) * math.sin((1 - ELASTIC_CONST2 - t) * ELASTIC_CONST) \
+            + ELASTIC_OFFSET_FULL * (1 - t)
+
+    @staticmethod
+    def elastic_out(t: float) -> float:
+        return 2**(-10 * t) * math.sin((t - ELASTIC_CONST2) * ELASTIC_CONST) \
+            + 1 - ELASTIC_OFFSET_FULL * t
+
+    @staticmethod
+    def elastic_half_out(t: float) -> float:
+        return 2**(-10 * t) * math.sin((.5 * t - ELASTIC_CONST2) * ELASTIC_CONST) \
+            + 1 - ELASTIC_OFFSET_HALF * t
+
+    @staticmethod
+    def elastic_quarter_out(t: float) -> float:
+        return 2**(-10 * t) * math.sin((.25 * t - ELASTIC_CONST2) * ELASTIC_CONST) \
+            + 1 - ELASTIC_OFFSET_QUARTER * t
+
+    @staticmethod
+    def elastic_inout(t: float) -> float:
+        t *= 2
+        if t < 1:
+            return -.5 * (
+                2**(-10 + 10 * t) * math.sin((1 - ELASTIC_CONST2 * 1.5 - t) * ELASTIC_CONST / 1.5)
+                - IN_OUT_ELASTIC_OFFSET * (1 - t)
+            )
+        t -= 1
+        return .5 * (
+            2**(-10 * t) * math.sin((t - ELASTIC_CONST2 * 1.5) * ELASTIC_CONST / 1.5)
+            - IN_OUT_ELASTIC_OFFSET * t
+        ) + 1
+
+    @staticmethod
+    def back_in(t: float) -> float:
+        return t**2 * ((BACK_CONST + 1) * t - BACK_CONST)
+
+    @staticmethod
+    def back_out(t: float) -> float:
+        return (t - 1)**2 * ((BACK_CONST + 1) * (t - 1) + BACK_CONST) + 1
+
+    @staticmethod
+    def back_inout(t: float) -> float:
+        t *= 2
+        if t < 1:
+            return .5 * t**2 * ((BACK_CONST2 + 1) * t - BACK_CONST2)
+        t -= 2
+        return .5 * (t**2 * ((BACK_CONST2 + 1) * t + BACK_CONST2) + 2)
+
+    @staticmethod
+    def bounce_in(t: float) -> float:
+        t = 1 - t
+        if t < BOUNCE_CONST:
+            return 1 - 7.5625 * t**2
+        if t < 2 * BOUNCE_CONST:
+            t -= 1.5 * BOUNCE_CONST
+            return 1 - (7.5625 * t**2 + .75)
+        if t < 2.5 * BOUNCE_CONST:
+            t -= 2.25 * BOUNCE_CONST
+            return 1 - (7.5625 * t**2 + .9375)
+        t -= 2.625 * BOUNCE_CONST
+        return 1 - (7.5625 * t**2 + .984375)
+
+    @staticmethod
+    def bounce_out(t: float) -> float:
+        if t < BOUNCE_CONST:
+            return 7.5625 * t**2
+        if t < 2 * BOUNCE_CONST:
+            t -= 1.5 * BOUNCE_CONST
+            return 7.5625 * t**2 + .75
+        if t < 2.5 * BOUNCE_CONST:
+            t -= 2.25 * BOUNCE_CONST
+            return 7.5625 * t**2 + .9375
+        t -= 2.625 * BOUNCE_CONST
+        return 7.5625 * t**2 + .984375
+
+    @staticmethod
+    def bounce_inout(t: float) -> float:
+        return (
+            .5 - .5 * Easing.bounce_out(1 - t * 2)
+            if t < .5
+            else Easing.bounce_out((t - .5) * 2) * .5 + .5
+        )

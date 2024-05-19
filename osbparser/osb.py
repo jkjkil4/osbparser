@@ -4,8 +4,8 @@ import copy
 import itertools as it
 from dataclasses import dataclass
 from logging import WARNING
-from typing import (Any, Callable, Generator, Generic, Iterable, NoReturn,
-                    Self, TypeVar, overload)
+from typing import (Any, Callable, Generator, Generic, NoReturn, Self, TypeVar,
+                    overload)
 
 from osbparser.enums import (Easing, Layer, LoopType, Origin, Parameter,
                              Trigger, find_enum_by_name, find_enum_by_value)

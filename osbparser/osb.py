@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import copy
 import itertools as it
 from dataclasses import dataclass
-from typing import Any, Callable, Generator, Iterable, NoReturn, Self
+from logging import WARNING
+from typing import (Any, Callable, Generator, Generic, Iterable, NoReturn,
+                    Self, TypeVar, overload)
 
 from osbparser.enums import (Easing, Layer, Origin, Parameter, Trigger,
                              find_enum_by_name, find_enum_by_value)
 from osbparser.exception import (InvalidObjectTypeError, InvalidSectionError,
                                  MultipleSectionError, SubCommandNotSupported,
                                  WrongArgumentCount)
+from osbparser.logger import log
 from osbparser.tree import Tree, file2tree, str2tree
 from osbparser.utils import get_default, get_first_part, split_parts
 
@@ -17,6 +21,8 @@ __all__ = [
     'Events',
     'Sprite',
     'Animation',
+    'FlattenCommands',
+    'ClassifiedCommands',
     'Command',
     'SimpleCommand',
     'CmdFade',
@@ -33,6 +39,12 @@ __all__ = [
 ]
 
 EVENTS_SECTION_NAME = '[Events]'
+
+ObjT = TypeVar('ObjT', bound='Object')
+ObjU = TypeVar('ObjU', bound='Object')
+CmdT = TypeVar('CmdT', bound='SimpleCommand')
+
+ClassifiedCommandsDict = dict[type['SimpleCommand'], list['SimpleCommand']]
 
 
 @dataclass
@@ -82,7 +94,15 @@ class Events:
 OBJECT_NAME_MAP: dict[str, type[Object]] = {}
 
 
+@dataclass
 class Object:
+    commands: list[Command]
+    layer: Layer
+    origin: Origin
+    file: str
+    x: float
+    y: float
+
     @staticmethod
     def from_tree(tree: Tree) -> Object:
         lineno, text = tree[0]
@@ -97,13 +117,6 @@ class Object:
 
 @dataclass
 class Sprite(Object):
-    layer: Layer
-    origin: Origin
-    file: str
-    x: float
-    y: float
-    commands: list[Command]
-
     @staticmethod
     def from_tree(tree: Tree) -> Sprite:
         (lineno, text), children = tree
@@ -122,7 +135,10 @@ class Sprite(Object):
         command_groups = (Command.from_tree(child) for child in children)
         commands = list(it.chain.from_iterable(command_groups))
 
-        return Sprite(layer, origin, file, x, y, commands)
+        return Sprite(commands, layer, origin, file, x, y)
+
+    def flatten(self) -> FlattenCommands[Self]:
+        return FlattenCommands.from_object(self)
 
 
 @dataclass
@@ -135,11 +151,115 @@ class Animation(Object):
 OBJECT_NAME_MAP['Sprite'] = Sprite
 OBJECT_NAME_MAP['Animation'] = Animation
 
-#
+
+@dataclass
+class FlattenCommands(Generic[ObjT]):
+    obj: ObjT
+    commands: list[SimpleCommand]
+
+    @staticmethod
+    def from_object(obj: ObjU) -> FlattenCommands[ObjU]:
+        return FlattenCommands(obj, FlattenCommands.parse(obj.commands))
+
+    @overload
+    def __getitem__(self, i: int) -> SimpleCommand: ...
+    @overload
+    def __getitem__(self, s: slice) -> list[SimpleCommand]: ...
+
+    def __getitem__(self, v):
+        return self.commands[v]
+
+    def __len__(self) -> int:
+        return len(self.commands)
+
+    def classify(self) -> ClassifiedCommands[ObjT]:
+        return ClassifiedCommands.from_flatten(self)
+
+    @staticmethod
+    def parse(commands: list[Command]) -> list[SimpleCommand]:
+        result = []
+
+        for cmd in commands:
+            if isinstance(cmd, SimpleCommand):
+                result.append(copy.copy(cmd))
+
+            elif isinstance(cmd, CmdLoop):
+                subcommands = FlattenCommands.parse(cmd.children)
+                duration = 0
+
+                for subcmd in subcommands:
+                    duration = max(duration, subcmd.end)
+                    # Because subcmd here is copied through the flatten function
+                    # so we can modify the value directly without side effects
+                    subcmd.start += cmd.starttime
+                    subcmd.end += cmd.starttime
+
+                result.extend(subcommands)
+                for i in range(1, cmd.loopcount):
+                    for subcmd in subcommands:
+                        subcmd_copy = copy.copy(subcmd)
+                        offset = i * duration
+                        subcmd_copy.start += offset
+                        subcmd_copy.end += offset
+                        result.append(subcmd_copy)
+
+        return result
+
+
+@dataclass
+class ClassifiedCommands(Generic[ObjT]):
+    obj: ObjT
+    flatten: FlattenCommands[ObjT]
+    commands: ClassifiedCommandsDict
+
+    @staticmethod
+    def from_flatten(flatten: FlattenCommands[ObjU]) -> ClassifiedCommands[ObjU]:
+        return ClassifiedCommands(flatten.obj, flatten, ClassifiedCommands.parse(flatten.commands))
+
+    def __getitem__(self, key: type[CmdT]) -> list[CmdT]:
+        return self.commands[key]
+
+    def visible_ranges(self) -> Generator[tuple[int, int], None, None]:
+        if not self.flatten:
+            return
+
+        fade_cmds = self[CmdFade]
+        start = self.flatten[0].start
+        for cmd in fade_cmds:
+            if start is None and (cmd.start_opacity != 0 or cmd.end_opacity != 0):
+                start = cmd.start
+            if start is not None and cmd.end_opacity == 0:
+                yield (start, cmd.end)
+                start = None
+
+        if start is not None:
+            yield (start, self.flatten[-1].end)
+
+    @staticmethod
+    def parse(commands: list[SimpleCommand]) -> ClassifiedCommandsDict:
+        result: ClassifiedCommandsDict = {
+            key: []
+            for key in (CmdFade,
+                        CmdMove, CmdMoveX, CmdMoveY,
+                        CmdScale, CmdVectorScale,
+                        CmdRotate,
+                        CmdColour,
+                        CmdParameters)
+        }
+        for cmd in commands:
+            lst = result.get(cmd.__class__, None)
+            if lst is not None:
+                lst.append(cmd)
+        return result
+
+
 COMMAND_NAME_MAP: dict[str, type[Command]] = {}
 
 
+@dataclass
 class Command:
+    lineno: int
+
     @staticmethod
     def from_tree(tree: Tree) -> list[Command]:
         lineno, text = tree[0]
@@ -237,7 +357,7 @@ class SimpleCommand(Command):
         return self.start == self.end
 
 
-class AttrsCommand(SimpleCommand):
+class AnimCommand(SimpleCommand):
     @classmethod
     def from_tree(cls, tree: Tree, one_arg_len: int, *, factory: Callable[[str], Any] = float) -> list[Self]:
         (lineno, text), children = tree
@@ -246,14 +366,14 @@ class AttrsCommand(SimpleCommand):
         args = split_parts(text)[1:]
 
         return [
-            cls(easing, start, end, *[factory(a) for a in attrs])
+            cls(lineno, easing, start, end, *[factory(a) for a in attrs])
             for easing, start, end, attrs
             in cls.parse_args(args, one_arg_len, lineno)
         ]
 
 
 @dataclass
-class CmdFade(AttrsCommand):
+class CmdFade(AnimCommand):
     '''
     ``startopacity``: the opacity at the beginning of the animation
     ``endopacity``: the opacity at the end of the animation
@@ -269,7 +389,7 @@ class CmdFade(AttrsCommand):
 
 
 @dataclass
-class CmdMove(AttrsCommand):
+class CmdMove(AnimCommand):
     '''
     ``startx, starty``: the position at the beginning of the animation
     ``endx, endy``: the position at the end of the animation
@@ -287,7 +407,7 @@ class CmdMove(AttrsCommand):
 
 
 @dataclass
-class CmdMoveX(AttrsCommand):
+class CmdMoveX(AnimCommand):
     '''
     ``startx``: the x position at the beginning of the animation
     ``endx``: the x position at the end of the animation
@@ -301,7 +421,7 @@ class CmdMoveX(AttrsCommand):
 
 
 @dataclass
-class CmdMoveY(AttrsCommand):
+class CmdMoveY(AnimCommand):
     '''
     ``starty``: the y position at the beginning of the animation
     ``endy``: the y position at the end of the animation
@@ -315,7 +435,7 @@ class CmdMoveY(AttrsCommand):
 
 
 @dataclass
-class CmdScale(AttrsCommand):
+class CmdScale(AnimCommand):
     '''
     ``startscale``: the scale factor at the beginning of the animation
     ``endscale``: the scale factor at the end of the animation
@@ -331,7 +451,7 @@ class CmdScale(AttrsCommand):
 
 
 @dataclass
-class CmdVectorScale(AttrsCommand):
+class CmdVectorScale(AnimCommand):
     '''
     ``startx, starty``: the scale factor at the beginning of the animation
     ``endx, endy``: the scale factor at the end of the animation
@@ -349,7 +469,7 @@ class CmdVectorScale(AttrsCommand):
 
 
 @dataclass
-class CmdRotate(AttrsCommand):
+class CmdRotate(AnimCommand):
     '''
     ``startangle``: the angle to rotate by in radians at the beginning of the animation
     ``endangle``: the angle to rotate by in radians at the end of the animation
@@ -365,7 +485,7 @@ class CmdRotate(AttrsCommand):
 
 
 @dataclass
-class CmdColour(AttrsCommand):
+class CmdColour(AnimCommand):
     '''
     ``r1, g1, b1``: the starting component-wise colour
     ``r2, g2, b2``: the finishing component-wise colour
@@ -401,6 +521,15 @@ class CmdLoop(Command):
     loopcount: int
     children: list[Command]
 
+    def __post_init__(self) -> None:
+        if not log.isEnabledFor(WARNING):
+            return
+
+        for cmd in self.children:
+            if not isinstance(cmd, SimpleCommand):
+                log.warning(f'Nested loop at line {cmd.lineno} '
+                            'may not be displayed in osu! correctly.')
+
     @staticmethod
     def from_tree(tree: Tree) -> list[CmdLoop]:
         (lineno, text), children = tree
@@ -411,8 +540,10 @@ class CmdLoop(Command):
                                      f'expected 2, found {len(args)}')
 
         s_starttime, s_loopcount = args
+        command_groups = (Command.from_tree(child) for child in children)
+        commands = list(it.chain.from_iterable(command_groups))
 
-        return [CmdLoop(int(s_starttime), int(s_loopcount), [Command.from_tree(child) for child in children])]
+        return [CmdLoop(lineno, int(s_starttime), int(s_loopcount), commands)]
 
 
 @dataclass
@@ -466,7 +597,7 @@ class CmdParameters(SimpleCommand):
 
         easing, start, end = cls.parse_time_args(*args[:3], lineno)
 
-        return [CmdParameters(easing, start, end, find_enum_by_name(Parameter, args[3]))]
+        return [CmdParameters(easing, start, end, find_enum_by_name(Parameter, args[3], lineno))]
 
 
 COMMAND_NAME_MAP['F'] = CmdFade

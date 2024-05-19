@@ -1,13 +1,8 @@
 import logging
-from rich.logging import RichHandler
 
 __all__ = ["log"]
 
-
-FORMAT = "%(message)s"
-logging.basicConfig(
-    level=logging.WARNING, format=FORMAT, datefmt="[%X]", handlers=[RichHandler(show_time=False)]
-)
+logging.basicConfig(format='[%(name)s] %(levelname)s: %(message)s')
 
 log = logging.getLogger("osbparser")
 log.setLevel("DEBUG")
